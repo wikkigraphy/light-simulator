@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="cheatsheet" id="cheatsheetApp">
+    <h1>Photography Lighting Cheatsheet</h1>
+    <p class="cheatsheet__intro">Professional-grade reference for flash selection, light modifiers, lens choice, and lighting patterns.</p>
+
+    <div class="cheatsheet__tabs">
+        <button class="cs-tab active" data-cstab="flash">Flash Types</button>
+        <button class="cs-tab" data-cstab="modifiers">Modifiers</button>
+        <button class="cs-tab" data-cstab="lenses">Lenses</button>
+        <button class="cs-tab" data-cstab="patterns">Light Patterns</button>
+    </div>
+
+    <div class="cs-content active" id="cstab-flash">
+        <div id="flashGuides" class="guide-grid"></div>
+    </div>
+
+    <div class="cs-content" id="cstab-modifiers">
+        <div id="modifierGuides" class="guide-grid"></div>
+    </div>
+
+    <div class="cs-content" id="cstab-lenses">
+        <div id="lensGuides" class="guide-grid"></div>
+    </div>
+
+    <div class="cs-content" id="cstab-patterns">
+        <div id="patternPresets" class="preset-grid"></div>
+    </div>
+</div>
+
+<script src="/static/js/cheatsheet.js"></script>
+{{end}}

@@ -1,0 +1,215 @@
+{{define "content"}}
+<div class="simulator" id="app">
+    <div class="simulator__toolbar">
+        <div class="toolbar__section">
+            <label>Mode:</label>
+            <select id="shootMode">
+                <option value="portrait">Portrait</option>
+                <option value="product">Product</option>
+                <option value="fashion">Fashion</option>
+                <option value="food">Food</option>
+                <option value="headshot">Headshot</option>
+                <option value="group">Group</option>
+            </select>
+        </div>
+        <div class="toolbar__section">
+            <label>Preset:</label>
+            <select id="presetSelect"><option value="">Custom</option></select>
+        </div>
+        <div class="toolbar__section">
+            <button class="btn btn--sm btn--primary" id="addLightBtn">+ Add Light</button>
+            <button class="btn btn--sm btn--secondary" id="uploadBtn">Upload Photo</button>
+            <input type="file" id="photoInput" accept=".jpg,.jpeg,.png,.webp" hidden>
+        </div>
+        <div class="toolbar__section">
+            <button class="btn btn--sm btn--accent" id="analyzeBtn">Analyze</button>
+            <button class="btn btn--sm btn--save" id="savePresetBtn">Save Preset</button>
+        </div>
+    </div>
+
+    <div class="simulator__workspace">
+        <div class="simulator__diagram-panel">
+            <h3>Top-Down Diagram</h3>
+            <div class="diagram" id="diagram">
+                <svg id="diagramSvg" viewBox="-300 -300 600 600" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Grid -->
+                    <defs>
+                        <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#2a2a2a" stroke-width="0.5"/>
+                        </pattern>
+                    </defs>
+                    <rect x="-300" y="-300" width="600" height="600" fill="url(#grid)"/>
+                    <!-- Distance rings -->
+                    <circle cx="0" cy="0" r="75" fill="none" stroke="#333" stroke-width="0.5" stroke-dasharray="4"/>
+                    <circle cx="0" cy="0" r="150" fill="none" stroke="#333" stroke-width="0.5" stroke-dasharray="4"/>
+                    <circle cx="0" cy="0" r="225" fill="none" stroke="#333" stroke-width="0.5" stroke-dasharray="4"/>
+                    <text x="78" y="-3" fill="#555" font-size="9">1m</text>
+                    <text x="153" y="-3" fill="#555" font-size="9">2m</text>
+                    <text x="228" y="-3" fill="#555" font-size="9">3m</text>
+                    <!-- Subject marker -->
+                    <circle cx="0" cy="0" r="20" fill="#444" stroke="#888" stroke-width="1.5"/>
+                    <text x="0" y="4" text-anchor="middle" fill="#ccc" font-size="10">S</text>
+                    <!-- Camera -->
+                    <g id="cameraMarker" transform="translate(0, 200)">
+                        <rect x="-15" y="-10" width="30" height="20" rx="3" fill="#2196F3" stroke="#64B5F6" stroke-width="1"/>
+                        <circle cx="0" cy="0" r="6" fill="#1565C0"/>
+                        <text x="0" y="25" text-anchor="middle" fill="#90CAF9" font-size="9">CAM</text>
+                    </g>
+                    <!-- Light markers rendered by JS -->
+                    <g id="lightsGroup"></g>
+                </svg>
+            </div>
+            <div class="diagram__legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#FF9800"></span> Key</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#4CAF50"></span> Fill</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#E91E63"></span> Rim</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#9C27B0"></span> Hair</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#00BCD4"></span> BG</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#FFC107"></span> Accent</span>
+            </div>
+        </div>
+
+        <div class="simulator__preview-panel">
+            <h3>Live Preview</h3>
+            <div class="preview" id="preview">
+                <div class="preview__backdrop" id="previewBackdrop"></div>
+                <div class="preview__shadow-layer" id="shadowLayer"></div>
+                <div class="preview__subject" id="subjectContainer">
+                    <img id="subjectImg" src="/static/images/default-subject.png" alt="Subject">
+                </div>
+                <div class="preview__highlight-layer" id="highlightLayer"></div>
+                <div class="preview__info" id="previewInfo">
+                    <span id="evDisplay">EV: —</span>
+                    <span id="ratioDisplay">Ratio: —</span>
+                    <span id="shadowDisplay">Shadows: —</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="simulator__controls-panel">
+            <div class="controls-tabs">
+                <button class="tab active" data-tab="lights">Lights</button>
+                <button class="tab" data-tab="camera">Camera</button>
+                <button class="tab" data-tab="scene">Scene</button>
+            </div>
+
+            <div class="tab-content active" id="tab-lights">
+                <div id="lightsList"></div>
+            </div>
+
+            <div class="tab-content" id="tab-camera">
+                <div class="control-group">
+                    <label>Focal Length <span class="val" id="focalVal">85mm</span></label>
+                    <input type="range" id="focalLength" min="14" max="200" value="85">
+                </div>
+                <div class="control-group">
+                    <label>Aperture <span class="val" id="apertureVal">f/2.8</span></label>
+                    <input type="range" id="aperture" min="14" max="220" value="28" step="1">
+                </div>
+                <div class="control-group">
+                    <label>ISO <span class="val" id="isoVal">100</span></label>
+                    <select id="iso">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="400">400</option>
+                        <option value="800">800</option>
+                        <option value="1600">1600</option>
+                        <option value="3200">3200</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Shutter Speed</label>
+                    <select id="shutterSpeed">
+                        <option value="1/60">1/60</option>
+                        <option value="1/125">1/125</option>
+                        <option value="1/160">1/160</option>
+                        <option value="1/200" selected>1/200</option>
+                        <option value="1/250">1/250</option>
+                        <option value="1/500">1/500</option>
+                        <option value="1/1000">1/1000 (HSS)</option>
+                        <option value="1/2000">1/2000 (HSS)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>White Balance <span class="val" id="wbVal">5500K</span></label>
+                    <input type="range" id="whiteBalance" min="2500" max="8000" value="5500" step="100">
+                </div>
+                <div class="control-group">
+                    <label>Sensor</label>
+                    <select id="sensorSize">
+                        <option value="medium_format">Medium Format</option>
+                        <option value="full_frame" selected>Full Frame</option>
+                        <option value="apsc">APS-C</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Camera Distance <span class="val" id="camDistVal">2.5m</span></label>
+                    <input type="range" id="camDistance" min="5" max="80" value="25">
+                </div>
+                <div class="control-group">
+                    <label>Camera Height Angle <span class="val" id="camAngleVal">0°</span></label>
+                    <input type="range" id="camAngle" min="-45" max="90" value="0">
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-scene">
+                <div class="control-group">
+                    <label>Backdrop Color</label>
+                    <input type="color" id="backdropColor" value="#1a1a1a">
+                </div>
+                <div class="control-group">
+                    <label>Ambient Light <span class="val" id="ambientVal">10%</span></label>
+                    <input type="range" id="ambientLight" min="0" max="100" value="10">
+                </div>
+            </div>
+
+            <div class="analysis-panel" id="analysisPanel" hidden>
+                <h4>Analysis</h4>
+                <div id="analysisContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="custom-presets-panel" id="customPresetsPanel" hidden>
+        <div class="custom-presets-panel__header">
+            <h4>My Custom Presets</h4>
+            <button class="btn btn--sm btn--secondary" id="closeCustomPanel">&times;</button>
+        </div>
+        <div id="customPresetsList"></div>
+    </div>
+
+    <div class="save-dialog-overlay" id="saveDialogOverlay" hidden>
+        <div class="save-dialog">
+            <h3>Save Custom Preset</h3>
+            <div class="control-group">
+                <label>Preset Name</label>
+                <input type="text" id="savePresetName" placeholder="My Custom Setup" maxlength="60">
+            </div>
+            <div class="control-group">
+                <label>Category</label>
+                <select id="savePresetCategory">
+                    <option value="portrait">Portrait</option>
+                    <option value="product">Product</option>
+                    <option value="fashion">Fashion</option>
+                    <option value="food">Food</option>
+                    <option value="headshot">Headshot</option>
+                    <option value="group">Group</option>
+                    <option value="sport">Sport</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Notes (optional)</label>
+                <textarea id="savePresetNotes" rows="2" placeholder="Describe your setup..."></textarea>
+            </div>
+            <div class="save-dialog__actions">
+                <button class="btn btn--sm btn--secondary" id="cancelSaveBtn">Cancel</button>
+                <button class="btn btn--sm btn--primary" id="confirmSaveBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/simulator.js"></script>
+{{end}}
