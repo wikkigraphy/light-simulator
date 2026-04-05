@@ -1,0 +1,103 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  GO_VERSION: "1.26"
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  verify:
+    name: Pre-Deploy Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --help
+
+      - name: Run make update
+        run: make update
+
+  deploy-production:
+    name: Deploy Production
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel Production
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tail -1)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed to: $URL"
+
+  cleanup-old-deployments:
+    name: Cleanup Old Deployments
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Remove old non-production deployments
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          echo "Fetching deployments..."
+
+          DEPLOYMENTS=$(vercel ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" 2>/dev/null \
+            | grep -v "Production" \
+            | grep -v "^$" \
+            | grep -v "Age" \
+            | grep -v "Inspect" \
+            | awk '{print $2}' \
+            | head -20)
+
+          if [ -z "$DEPLOYMENTS" ]; then
+            echo "No old deployments to clean up."
+            exit 0
+          fi
+
+          SKIP_COUNT=3
+          COUNT=0
+          for URL in $DEPLOYMENTS; do
+            COUNT=$((COUNT + 1))
+            if [ $COUNT -le $SKIP_COUNT ]; then
+              echo "Keeping recent deployment: $URL"
+              continue
+            fi
+            echo "Removing old deployment: $URL"
+            vercel rm "$URL" --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" 2>/dev/null || true
+          done
+
+          echo "Cleanup complete."

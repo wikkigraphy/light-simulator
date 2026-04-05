@@ -1,0 +1,14 @@
+[build]
+cmd = "go build -o bin/light-simulator ./cmd/server"
+bin = "bin/light-simulator"
+delay = 1000
+exclude_dir = ["bin", "uploads", "vendor", "tmp", ".git", ".github", "node_modules"]
+include_ext = ["go", "html", "css", "js"]
+exclude_regex = ["_test.go"]
+stop_on_error = true
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true

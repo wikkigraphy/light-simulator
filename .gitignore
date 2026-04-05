@@ -1,0 +1,16 @@
+bin/
+uploads/
+coverage.out
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.prof
+tmp/
+.air.toml.bak
+vendor/
+.env
+.env.local
+.vercel
+.env*.local

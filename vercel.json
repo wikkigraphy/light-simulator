@@ -1,13 +1,12 @@
 {
-  "buildCommand": "go build -ldflags=\"-s -w\" -o bin/light-simulator ./cmd/server",
-  "outputDirectory": "web/static",
-  "framework": null,
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/uploads/:path*", "destination": "/uploads/:path*" },
-    { "source": "/static/:path*", "destination": "/static/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "go",
+  "build": {
+    "env": {
+      "GO_BUILD_FLAGS": "-ldflags '-s -w'",
+      "ENVIRONMENT": "production"
+    }
+  },
   "headers": [
     {
       "source": "/static/(.*)",
