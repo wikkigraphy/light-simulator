@@ -76,7 +76,7 @@ make run
 │       └── scheduled.yml          # Weekly cron: verification + security scan
 ├── Dockerfile                      # Multi-stage production build
 ├── Makefile                        # Build commands
-├── vercel.json                     # Vercel deployment config
+├── vercel.json                     # Vercel deployment config (Go framework preset)
 ├── .golangci.yml                   # Linter configuration
 ├── .air.toml                       # Live reload config
 └── .cursor/skills/                 # Cursor AI skill for dependency tracking
@@ -183,7 +183,12 @@ make docker-run
 
 ## Deployment
 
-### Vercel
+### Vercel (Native Go Support)
+
+The project uses Vercel's native Go framework preset (`"framework": "go"` in `vercel.json`).
+Vercel automatically detects `cmd/server/main.go`, installs the Go version from `go.mod`,
+builds the binary, and deploys it. The server listens on the `PORT` environment variable
+set by Vercel at runtime.
 
 ```bash
 vercel deploy

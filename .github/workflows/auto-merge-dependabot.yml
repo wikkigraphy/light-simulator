@@ -1,0 +1,67 @@
+name: Auto-Merge Dependabot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  ci-gate:
+    name: CI Gate for Dependabot
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: "1.26"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --help
+
+      - name: Run make update
+        run: make update
+
+      - name: Build Docker image
+        run: docker build -t light-simulator:pr-${{ github.event.pull_request.number }} .
+
+      - name: Smoke test Docker image
+        run: |
+          docker run -d --name smoke -p 8080:8080 light-simulator:pr-${{ github.event.pull_request.number }}
+          sleep 3
+          curl -sf http://localhost:8080/api/health || exit 1
+          docker stop smoke
+          docker rm smoke
+
+  auto-approve-and-merge:
+    name: Auto-Approve & Merge
+    needs: ci-gate
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge (squash)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

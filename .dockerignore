@@ -1,0 +1,8 @@
+bin/
+uploads/
+coverage.out
+.git/
+.github/
+*.md
+.cursor/
+.tool-versions
