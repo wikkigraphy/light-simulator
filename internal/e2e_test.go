@@ -8,11 +8,11 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -20,6 +20,7 @@ import (
 	"github.com/srivickynesh/light-simulator/internal/lighting"
 	"github.com/srivickynesh/light-simulator/internal/middleware"
 	"github.com/srivickynesh/light-simulator/internal/models"
+	"github.com/srivickynesh/light-simulator/web"
 )
 
 func setupServer(t *testing.T) *httptest.Server {
@@ -28,12 +29,17 @@ func setupServer(t *testing.T) *httptest.Server {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 
-	templateDir := filepath.Join("..", "web", "templates")
-	staticDir := filepath.Join("..", "web", "static")
+	staticSub, err := fs.Sub(web.Content, "static")
+	if err != nil {
+		t.Fatalf("embedded static fs: %v", err)
+	}
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-
-	pages := handlers.NewPages(templateDir, true, logger)
+	templateSub, err := fs.Sub(web.Content, "templates")
+	if err != nil {
+		t.Fatalf("embedded template fs: %v", err)
+	}
+	pages := handlers.NewPagesFS(templateSub, true, logger)
 	pages.RegisterRoutes(mux)
 
 	api := handlers.NewAPI()

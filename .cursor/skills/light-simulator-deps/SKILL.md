@@ -116,6 +116,7 @@ web/
 | `VERCEL_TOKEN` | Vercel API token for deploy/cleanup |
 | `VERCEL_ORG_ID` | Vercel organization/team ID |
 | `VERCEL_PROJECT_ID` | Vercel project ID |
+| `ORG_TOKEN` | GitHub PAT for Dependabot auto-merge (approve + merge PRs) |
 
 ### Required GitHub Settings
 

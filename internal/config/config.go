@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -36,6 +37,10 @@ const (
 )
 
 // Load reads configuration from environment variables with sensible defaults.
+// Relative paths for StaticDir, TemplateDir, and UploadDir are resolved against
+// the executable's directory when they don't exist relative to the working directory.
+// This ensures the server works on platforms like Vercel where the cwd may differ
+// from the project root.
 func Load() (*Config, error) {
 	cfg := &Config{
 		Port:         envInt("PORT", defaultPort),
@@ -54,7 +59,32 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid port: %d", cfg.Port)
 	}
 
+	cfg.StaticDir = resolveDir(cfg.StaticDir)
+	cfg.TemplateDir = resolveDir(cfg.TemplateDir)
+	cfg.UploadDir = resolveDir(cfg.UploadDir)
+
 	return cfg, nil
+}
+
+// resolveDir returns the path as-is if it exists relative to the cwd.
+// Otherwise it tries resolving relative to the executable's directory,
+// which handles deployment platforms that run the binary from a different cwd.
+func resolveDir(dir string) string {
+	if filepath.IsAbs(dir) {
+		return dir
+	}
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		return dir
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return dir
+	}
+	candidate := filepath.Join(filepath.Dir(exe), dir)
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate
+	}
+	return dir
 }
 
 // Addr returns the listen address string.

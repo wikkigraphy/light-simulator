@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/srivickynesh/light-simulator/internal/config"
 	"github.com/srivickynesh/light-simulator/internal/handlers"
 	"github.com/srivickynesh/light-simulator/internal/middleware"
+	"github.com/srivickynesh/light-simulator/web"
 )
 
 func main() {
@@ -39,12 +41,17 @@ func run() error {
 
 	mux := http.NewServeMux()
 
-	// Static file server with cache headers
-	staticFS := http.FileServer(http.Dir(cfg.StaticDir))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", staticFS))
+	staticSub, err := fs.Sub(web.Content, "static")
+	if err != nil {
+		return fmt.Errorf("embedded static fs: %w", err)
+	}
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
-	// Register page routes
-	pages := handlers.NewPages(cfg.TemplateDir, !cfg.IsProd(), logger)
+	templateSub, err := fs.Sub(web.Content, "templates")
+	if err != nil {
+		return fmt.Errorf("embedded template fs: %w", err)
+	}
+	pages := handlers.NewPagesFS(templateSub, !cfg.IsProd(), logger)
 	pages.RegisterRoutes(mux)
 
 	// Register API routes

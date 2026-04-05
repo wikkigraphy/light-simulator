@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 // Pages serves HTML template pages.
 type Pages struct {
 	templateDir string
+	templateFS  fs.FS
 	logger      *slog.Logger
 	cache       map[string]*template.Template
 	mu          sync.RWMutex
@@ -24,6 +26,16 @@ func NewPages(templateDir string, isDev bool, logger *slog.Logger) *Pages {
 		logger:      logger,
 		cache:       make(map[string]*template.Template),
 		isDev:       isDev,
+	}
+}
+
+// NewPagesFS creates a page handler backed by an fs.FS (e.g. embed.FS).
+func NewPagesFS(templateFS fs.FS, isDev bool, logger *slog.Logger) *Pages {
+	return &Pages{
+		templateFS: templateFS,
+		logger:     logger,
+		cache:      make(map[string]*template.Template),
+		isDev:      isDev,
 	}
 }
 
@@ -77,10 +89,16 @@ func (p *Pages) loadTemplate(name string) (*template.Template, error) {
 		p.mu.RUnlock()
 	}
 
-	layoutPath := filepath.Join(p.templateDir, "layout.html")
-	pagePath := filepath.Join(p.templateDir, name)
+	var tmpl *template.Template
+	var err error
 
-	tmpl, err := template.ParseFiles(layoutPath, pagePath)
+	if p.templateFS != nil {
+		tmpl, err = template.ParseFS(p.templateFS, "layout.html", name)
+	} else {
+		layoutPath := filepath.Join(p.templateDir, "layout.html")
+		pagePath := filepath.Join(p.templateDir, name)
+		tmpl, err = template.ParseFiles(layoutPath, pagePath)
+	}
 	if err != nil {
 		return nil, err
 	}
