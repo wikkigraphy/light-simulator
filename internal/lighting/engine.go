@@ -18,9 +18,20 @@ type LightContribution struct {
 	ColorTemp  int     `json:"color_temp"`
 }
 
+// PanelEffect represents a passive panel's computed influence on the scene.
+type PanelEffect struct {
+	PanelID          string  `json:"panel_id"`
+	Type             string  `json:"type"`
+	EffectIntensity  float64 `json:"effect_intensity"`
+	SoftnessModifier float64 `json:"softness_modifier"`
+	ColorTempShift   int     `json:"color_temp_shift"`
+	Description      string  `json:"description"`
+}
+
 // SceneAnalysis is the computed result of the lighting engine.
 type SceneAnalysis struct {
 	Contributions  []LightContribution `json:"contributions"`
+	PanelEffects   []PanelEffect       `json:"panel_effects,omitempty"`
 	KeyToFillRatio float64             `json:"key_to_fill_ratio"`
 	OverallEV      float64             `json:"overall_ev"`
 	ShadowQuality  string              `json:"shadow_quality"` // "hard", "medium", "soft"
@@ -65,8 +76,21 @@ func Analyze(scene *models.Scene) *SceneAnalysis {
 		}
 	}
 
+	analysis.PanelEffects = computePanelEffects(scene, analysis.Contributions)
+
+	for _, pe := range analysis.PanelEffects {
+		switch {
+		case pe.EffectIntensity > 0:
+			fillIntensity += pe.EffectIntensity
+		case pe.EffectIntensity < 0:
+			fillIntensity = math.Max(0, fillIntensity+pe.EffectIntensity)
+		}
+	}
+
 	if fillIntensity > 0 {
 		analysis.KeyToFillRatio = keyIntensity / fillIntensity
+	} else if keyIntensity > 0 {
+		analysis.KeyToFillRatio = keyIntensity * 16
 	}
 
 	analysis.OverallEV = computeExposureValue(scene)
@@ -84,15 +108,32 @@ func computeContribution(light *models.Light) LightContribution {
 		dist = 0.1
 	}
 
-	// Inverse-square law falloff
-	rawIntensity := light.Power / (dist * dist)
+	var rawIntensity float64
+	if light.Type == models.LightTypeSun {
+		// The sun is effectively at infinite distance, so inverse-square
+		// falloff doesn't apply. Power represents solar intensity scaled
+		// by time of day / cloud cover (100% = direct noon sun ≈ 100k lux).
+		// Height (Y) encodes sun elevation; higher Y = higher sun = more intense.
+		elevation := math.Max(light.Position.Y, 0.5)
+		elevFactor := math.Min(elevation/3.0, 1.0)
+		rawIntensity = light.Power * 1.2 * (0.3 + 0.7*elevFactor)
+	} else {
+		// Inverse-square law falloff for point/area sources
+		rawIntensity = light.Power / (dist * dist)
+	}
 
 	softness := modifierSoftness(light.Modifier)
+	if light.Type == models.LightTypeSun {
+		softness = 0.15
+	}
 	if light.Feathered {
 		softness = math.Min(1.0, softness+0.15)
 	}
 
 	spillAngle := modifierSpill(light.Modifier, light.GridDegree)
+	if light.Type == models.LightTypeSun {
+		spillAngle = 180
+	}
 
 	direction := math.Atan2(light.Position.X, light.Position.Z) * (180.0 / math.Pi)
 
@@ -161,7 +202,14 @@ func computeExposureValue(scene *models.Scene) float64 {
 
 	var shutterFraction float64 = 200
 	if cam.ShutterSpeed != "" {
-		// Simplified: assume format "1/N"
+		var num, denom float64
+		if n, _ := fmt.Sscanf(cam.ShutterSpeed, "%f/%f", &num, &denom); n == 2 && num > 0 {
+			shutterFraction = denom / num
+		} else if n, _ := fmt.Sscanf(cam.ShutterSpeed, "%f", &num); n == 1 && num > 0 {
+			shutterFraction = 1.0 / num
+		}
+	}
+	if shutterFraction < 1 {
 		shutterFraction = 200
 	}
 
@@ -236,14 +284,29 @@ func computeCSSFilters(scene *models.Scene, analysis *SceneAnalysis) CSSLighting
 		}
 	}
 
-	if totalIntensity > 0 {
-		avgTemp := weightedTemp / totalIntensity
+	// Apply panel effects to total intensity and color temperature.
+	// Bounce panels add reflected light; negative fill and flags subtract;
+	// diffusion reduces intensity. Gold bounce shifts color temperature.
+	var panelIntensityDelta float64
+	var panelTempShift float64
+	for _, pe := range analysis.PanelEffects {
+		panelIntensityDelta += pe.EffectIntensity
+		if pe.ColorTempShift != 0 && pe.EffectIntensity > 0 {
+			panelTempShift += float64(pe.ColorTempShift) * pe.EffectIntensity
+		}
+	}
 
-		// Brightness: scale to reasonable CSS range [0.3 - 1.8]
+	totalIntensity = math.Max(0, totalIntensity+panelIntensityDelta)
+
+	if totalIntensity > 0 {
+		if panelTempShift != 0 {
+			weightedTemp += panelTempShift
+		}
+		avgTemp := weightedTemp / math.Max(totalIntensity, 0.001)
+
 		normalizedIntensity := math.Min(totalIntensity/50.0, 1.0)
 		filters.Brightness = 0.3 + normalizedIntensity*1.5
 
-		// Color temperature: 5500K is neutral, below=warm, above=cool
 		filters.WarmthShift = (avgTemp - 5500) / 3000.0
 		if filters.WarmthShift > 0 {
 			filters.HueRotate = -filters.WarmthShift * 15
@@ -257,14 +320,30 @@ func computeCSSFilters(scene *models.Scene, analysis *SceneAnalysis) CSSLighting
 		filters.Contrast = 1.0 + math.Min(analysis.KeyToFillRatio/8.0, 0.5)
 	}
 
-	// Shadow gradient position based on key light direction
+	// Panel softness modifiers affect shadow quality.
+	// Diffusion panels soften shadows; negative fill hardens the shadow side.
+	panelSoftnessAdj := 0.0
+	for _, pe := range analysis.PanelEffects {
+		if pe.SoftnessModifier > 0.8 {
+			panelSoftnessAdj += 0.1
+		}
+		if pe.EffectIntensity < 0 && pe.SoftnessModifier == 0 {
+			panelSoftnessAdj -= 0.05
+		}
+	}
+
 	shadowSide := keyDir + 180
 	if shadowSide > 360 {
 		shadowSide -= 360
 	}
-	filters.ShadowGradient = buildShadowGradient(shadowSide, analysis.ShadowQuality)
+	shadowQuality := analysis.ShadowQuality
+	if panelSoftnessAdj > 0.05 && shadowQuality == "hard" {
+		shadowQuality = "medium"
+	} else if panelSoftnessAdj < -0.03 && shadowQuality == "soft" {
+		shadowQuality = "medium"
+	}
+	filters.ShadowGradient = buildShadowGradient(shadowSide, shadowQuality)
 
-	// Highlight position from key light
 	hlX := 50 + math.Sin(keyDir*math.Pi/180)*30
 	hlY := 50 - math.Cos(keyDir*math.Pi/180)*30
 	filters.HighlightPos = buildHighlightPos(hlX, hlY)
@@ -344,7 +423,261 @@ func generateWarnings(scene *models.Scene, analysis *SceneAnalysis) []string {
 		}
 	}
 
+	warnings = append(warnings, generatePanelWarnings(scene)...)
+
 	return warnings
+}
+
+func generatePanelWarnings(scene *models.Scene) []string {
+	var warnings []string
+
+	var keyAngle float64
+	hasKey := false
+	for _, l := range scene.Lights {
+		if l.Role == models.RoleKey && l.Enabled {
+			keyAngle = l.Position.Angle
+			hasKey = true
+			break
+		}
+	}
+
+	for _, p := range scene.Panels {
+		if !p.Enabled {
+			continue
+		}
+		if p.Type == models.PanelNegativeFill && hasKey {
+			angleDiff := math.Abs(p.Position.Angle - keyAngle)
+			if angleDiff < 45 || angleDiff > 315 {
+				warnings = append(warnings, fmt.Sprintf("Panel '%s': negative fill on key-light side will reduce subject illumination", p.Name))
+			}
+		}
+	}
+
+	return warnings
+}
+
+func computePanelEffects(scene *models.Scene, contribs []LightContribution) []PanelEffect {
+	if len(scene.Panels) == 0 {
+		return nil
+	}
+
+	// Compute how much light actually reaches each panel by checking geometric
+	// alignment between every light source and the panel surface. Light that
+	// falls outside a light's spill cone contributes nothing.
+	effects := make([]PanelEffect, 0, len(scene.Panels))
+	for i := range scene.Panels {
+		p := &scene.Panels[i]
+		if !p.Enabled {
+			continue
+		}
+
+		incidentIntensity := computeIncidentLight(p, scene.Lights, contribs)
+		effect := computeSinglePanelEffect(p, contribs, incidentIntensity)
+		effects = append(effects, effect)
+	}
+	return effects
+}
+
+// computeIncidentLight calculates the total light energy arriving at a panel's
+// surface using inverse-square falloff from each light to the panel, cosine
+// attenuation based on the angle of incidence on the panel surface, and the
+// light's spill cone coverage. This replaces the simplistic "total scene
+// intensity" approach with proper radiometric calculation.
+func computeIncidentLight(panel *models.Panel, lights []models.Light, contribs []LightContribution) float64 {
+	var total float64
+
+	panelAngleRad := panel.Position.Angle * math.Pi / 180
+	panelX := math.Sin(panelAngleRad) * panel.Position.Distance
+	panelZ := math.Cos(panelAngleRad) * panel.Position.Distance
+
+	panelNormalAngle := panel.Position.Angle + 180 + panel.Rotation
+	panelNX := math.Sin(panelNormalAngle * math.Pi / 180)
+	panelNZ := math.Cos(panelNormalAngle * math.Pi / 180)
+
+	for li, light := range lights {
+		if !light.Enabled || li >= len(contribs) {
+			continue
+		}
+
+		if light.Type == models.LightTypeSun {
+			// Sun produces parallel rays from its angular direction.
+			// All panels are "in the beam"; cosine attenuation applies.
+			sunAngle := light.Position.Angle * math.Pi / 180
+			sunDirX := -math.Sin(sunAngle)
+			sunDirZ := -math.Cos(sunAngle)
+			cosIncidence := math.Abs(sunDirX*panelNX + sunDirZ*panelNZ)
+			total += contribs[li].Intensity * cosIncidence
+			continue
+		}
+
+		lightAngleRad := light.Position.Angle * math.Pi / 180
+		lightX := math.Sin(lightAngleRad) * light.Position.Distance
+		lightZ := math.Cos(lightAngleRad) * light.Position.Distance
+
+		dx := panelX - lightX
+		dz := panelZ - lightZ
+		distLP := math.Sqrt(dx*dx + dz*dz)
+		if distLP < 0.05 {
+			distLP = 0.05
+		}
+
+		dirX := dx / distLP
+		dirZ := dz / distLP
+
+		aimDist := math.Sqrt(lightX*lightX + lightZ*lightZ)
+		if aimDist < 0.01 {
+			aimDist = 0.01
+		}
+		aimX := -lightX / aimDist
+		aimZ := -lightZ / aimDist
+
+		cosAim := dirX*aimX + dirZ*aimZ
+		aimAngle := math.Acos(math.Max(-1, math.Min(1, cosAim))) * 180 / math.Pi
+
+		spillHalf := modifierSpill(light.Modifier, light.GridDegree) / 2
+		if aimAngle > spillHalf {
+			continue
+		}
+
+		cosIncidence := math.Abs(dirX*panelNX + dirZ*panelNZ)
+		intensityAtPanel := light.Power * cosIncidence / (distLP * distLP)
+
+		spillFraction := aimAngle / spillHalf
+		edgeFalloff := 1.0 - spillFraction*spillFraction
+		intensityAtPanel *= edgeFalloff
+
+		total += intensityAtPanel
+	}
+
+	// Minimum floor so panels still register a small effect from ambient bounce
+	if total < 0.5 && len(contribs) > 0 {
+		var totalScene float64
+		for _, c := range contribs {
+			totalScene += c.Intensity
+		}
+		total = math.Max(total, totalScene*0.05)
+	}
+
+	return total
+}
+
+func computeSinglePanelEffect(p *models.Panel, contribs []LightContribution, incidentLight float64) PanelEffect {
+	panelDist := p.Position.Distance
+	if panelDist < 0.1 {
+		panelDist = 0.1
+	}
+
+	sizeFactor := panelSizeFactor(p.Size)
+
+	switch p.Type {
+	case models.PanelBounceWhite:
+		return computeBounceEffect(p, 0.60, 0, sizeFactor, panelDist, incidentLight)
+	case models.PanelBounceSilver:
+		return computeBounceEffect(p, 0.85, 0, sizeFactor, panelDist, incidentLight)
+	case models.PanelBounceGold:
+		return computeBounceEffect(p, 0.75, 500, sizeFactor, panelDist, incidentLight)
+	case models.PanelNegativeFill:
+		return computeNegativeFillEffect(p, sizeFactor, panelDist, incidentLight)
+	case models.PanelFlag:
+		return computeFlagEffect(p, sizeFactor, panelDist, incidentLight)
+	case models.PanelDiffusion:
+		return computeDiffusionEffect(p, sizeFactor, panelDist, incidentLight)
+	default:
+		return PanelEffect{PanelID: p.ID, Type: string(p.Type)}
+	}
+}
+
+func computeBounceEffect(p *models.Panel, reflectivity float64, tempShift int, sizeFactor, panelDist, incidentLight float64) PanelEffect {
+	// Bounced light = incident energy * panel reflectivity * panel area factor,
+	// attenuated by inverse-square from panel to subject (panelDist).
+	bounced := incidentLight * reflectivity * sizeFactor / (panelDist * panelDist)
+	bounced = math.Min(bounced, incidentLight*reflectivity)
+
+	desc := fmt.Sprintf("Reflects %.0f%% of incident light (%.1f) as soft fill → +%.1f intensity",
+		reflectivity*100, incidentLight, bounced)
+	if tempShift > 0 {
+		desc += fmt.Sprintf(" (+%dK warmth)", tempShift)
+	}
+
+	return PanelEffect{
+		PanelID:          p.ID,
+		Type:             string(p.Type),
+		EffectIntensity:  bounced,
+		SoftnessModifier: 0.85 + sizeFactor*0.05,
+		ColorTempShift:   tempShift,
+		Description:      desc,
+	}
+}
+
+func computeNegativeFillEffect(p *models.Panel, sizeFactor, panelDist, incidentLight float64) PanelEffect {
+	// Negative fill absorbs ambient bounce light. The closer and larger the
+	// panel, the more shadow-side light it removes. Uses solid-angle
+	// approximation: the panel subtends more of the subject's view when
+	// closer and larger.
+	solidAngle := sizeFactor / (panelDist * panelDist)
+	absorption := incidentLight * 0.3 * solidAngle
+	absorption = math.Min(absorption, incidentLight*0.25)
+
+	desc := fmt.Sprintf("Absorbs ambient bounce (incident %.1f), deepens shadows → −%.1f intensity",
+		incidentLight, absorption)
+
+	return PanelEffect{
+		PanelID:         p.ID,
+		Type:            string(p.Type),
+		EffectIntensity: -absorption,
+		Description:     desc,
+	}
+}
+
+func computeFlagEffect(p *models.Panel, sizeFactor, panelDist, incidentLight float64) PanelEffect {
+	// Flags block direct spill from lights. The blocking fraction depends
+	// on how much of the light's beam the flag intercepts (solid angle).
+	solidAngle := sizeFactor / (panelDist * panelDist)
+	blocked := incidentLight * 0.15 * solidAngle
+	blocked = math.Min(blocked, incidentLight*0.15)
+
+	desc := fmt.Sprintf("Blocks light spill (incident %.1f) → −%.1f intensity", incidentLight, blocked)
+
+	return PanelEffect{
+		PanelID:         p.ID,
+		Type:            string(p.Type),
+		EffectIntensity: -blocked,
+		Description:     desc,
+	}
+}
+
+func computeDiffusionEffect(p *models.Panel, sizeFactor, _, incidentLight float64) PanelEffect {
+	// Diffusion panels transmit ~50-65% of light while converting it from
+	// specular to diffuse. Larger panels diffuse more area but also pass
+	// more total light. Net result: ~1-1.5 stop reduction.
+	reduction := incidentLight * 0.35 * sizeFactor
+	reduction = math.Min(reduction, incidentLight*0.5)
+
+	desc := fmt.Sprintf("Diffuses light (incident %.1f), reduces ~1-1.5 stops → −%.1f, greatly increases softness",
+		incidentLight, reduction)
+
+	return PanelEffect{
+		PanelID:          p.ID,
+		Type:             string(p.Type),
+		EffectIntensity:  -reduction,
+		SoftnessModifier: 0.95,
+		Description:      desc,
+	}
+}
+
+func panelSizeFactor(size models.PanelSize) float64 {
+	switch size {
+	case models.PanelSizeSmall:
+		return 0.3
+	case models.PanelSizeMedium:
+		return 0.55
+	case models.PanelSizeLarge:
+		return 0.85
+	case models.PanelSizeXLarge:
+		return 1.0
+	default:
+		return 0.5
+	}
 }
 
 func formatFloat(f float64) string {

@@ -9,6 +9,7 @@
     --accent-primary: #4a9eff;
     --accent-secondary: #ff6b35;
     --accent-success: #4caf50;
+    --bg-panel: #1a1a1a;
     --border: #2a2a2a;
     --border-hover: #444;
     --radius: 8px;
@@ -428,6 +429,23 @@ select:focus, input[type="color"]:focus { border-color: var(--accent-primary); }
 
 .light-card .control-group { margin-bottom: 0.4rem; }
 
+/* Panel Card (fill panels, reflectors, flags) */
+.panel-card {
+    background: var(--bg-tertiary);
+    border: 1px solid #455A64;
+    border-radius: var(--radius);
+    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+}
+.panel-card .control-group { margin-bottom: 0.4rem; }
+
+/* Panel legend dots */
+.legend-dot--panel {
+    width: 10px;
+    height: 6px;
+    border-radius: 2px;
+}
+
 /* Analysis Panel */
 .analysis-panel {
     padding: 0.75rem;
@@ -805,6 +823,32 @@ select:focus, input[type="color"]:focus { border-color: var(--accent-primary); }
     border: none;
 }
 .btn--save:hover { background: linear-gradient(135deg, #4CAF50, #388E3C); }
+
+.btn--panel {
+    background: linear-gradient(135deg, #607D8B, #455A64);
+    color: #fff;
+    border: none;
+}
+.btn--panel:hover { background: linear-gradient(135deg, #78909C, #546E7A); }
+
+.accessory-select {
+    background: var(--bg-tertiary);
+    color: var(--accent-secondary);
+    border: 1px solid var(--accent-secondary);
+    border-radius: var(--radius);
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.accessory-select:focus { border-color: var(--accent-primary); }
+
+.svg-delete-btn { opacity: 0; transition: opacity 0.15s; }
+[data-light-id]:hover .svg-delete-btn,
+[data-panel-id]:hover .svg-delete-btn { opacity: 1; }
+
+.panel-rotate-handle { opacity: 0; transition: opacity 0.15s; }
+[data-panel-id]:hover .panel-rotate-handle { opacity: 1; }
 
 .btn--xs {
     padding: 0.15rem 0.4rem;

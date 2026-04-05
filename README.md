@@ -4,19 +4,22 @@ Professional-grade interactive photography lighting simulator built in Go. Desig
 
 ## Features
 
-- **Interactive Simulator** — Top-down diagram with draggable lights, real-time subject preview
-- **24 Professional Presets** — Rembrandt, butterfly, clamshell, split, high-key, low-key, beauty ring, cinematic noir, product hero, glassware, food moody, group, sport, and more — each with detailed equipment lists
+- **Interactive Simulator** — Top-down diagram with draggable lights and panels, real-time subject preview with intensity-based beam visualization
+- **27 Professional Presets** — Rembrandt, butterfly, clamshell, split, high-key, low-key, beauty ring, cinematic noir, product hero, glassware, food moody, group, sport, 3 outdoor/sun presets, and more — each with detailed equipment lists, panels, and fill modifier descriptions
+- **Outdoor Mode & Sun Light** — Directional sun light source with parallel-ray visualization, elevation-based intensity, and panel interaction for outdoor photography simulation
+- **Fill Panels & Modifiers** — V-flats (negative fill), bounce cards (white/silver/gold), diffusion panels, and flags with realistic geometric ray-tracing physics (inverse-square falloff, cosine attenuation, spill-cone intersection)
+- **Rotatable Panels** — Rotate fill panels, reflectors, and flags in the diagram via rotation handle or Shift+drag; rotation affects physics calculations
 - **Flash Settings Display** — Per-light flash details (type, modifier, role, power, color temp, CRI, distance, angle, height, grid, feathered) shown automatically when any preset is loaded
 - **Custom Presets** — Save, load, rename, update, and delete your own presets stored in browser localStorage; persists across deployments until manually deleted
 - **Full Modifier Library** — Softbox, octabox, stripbox, beauty dish, honeycomb grid, snoot, barn doors, parabolic reflector, diffusion panel, umbrella, reflector
 - **Camera Controls** — Focal length, aperture, ISO, shutter speed, white balance, sensor size, camera distance and angle
 - **Photo Upload** — Upload your own subject or product photo for live lighting preview
-- **Lighting Engine** — Inverse-square law falloff, modifier softness modeling, CSS filter computation
+- **Lighting Engine** — Inverse-square law falloff, modifier softness modeling, CSS filter computation, geometric panel physics with incident light ray tracing
 - **Flash Guide** — Speedlight, monolight, pack & head, battery strobe, continuous LED, ring light
 - **Modifier Guide** — Size ranges, softness ratings, spill control, catchlight shapes, pro tips
 - **Lens Guide** — 24mm to 70-200mm with DOF notes, distortion characteristics, and best-use scenarios
 - **Product Photography Mode** — Flat lay, hero shot, white background e-commerce setups
-- **Scene Analysis** — Key-to-fill ratio, EV calculation, shadow quality, catchlight type, warnings
+- **Scene Analysis** — Key-to-fill ratio, EV calculation, shadow quality, catchlight type, warnings, panel effects on brightness/warmth/shadows
 
 ## Quick Start
 
@@ -45,10 +48,10 @@ make run
 ├── cmd/server/main.go              # Server entry point
 ├── internal/
 │   ├── config/config.go            # Environment configuration
-│   ├── models/lighting.go          # Domain models (Light, Camera, Scene, Preset)
-│   ├── lighting/engine.go          # Lighting physics + CSS filter computation
+│   ├── models/lighting.go          # Domain models (Light, Camera, Scene, Preset, Panel, LightTypeSun, ModeOutdoor)
+│   ├── lighting/engine.go          # Lighting physics + CSS filters + geometric panel ray tracing + sun directional light
 │   ├── cheatsheet/
-│   │   ├── presets.go              # 24 professional lighting presets with equipment lists
+│   │   ├── presets.go              # 27 professional lighting presets with equipment, panels, and fill modifier descriptions
 │   │   └── guides.go              # Flash, modifier, and lens guides
 │   ├── handlers/
 │   │   ├── api.go                  # JSON API endpoints
@@ -64,7 +67,7 @@ make run
 │   └── static/
 │       ├── css/main.css            # Dark-theme responsive styles
 │       ├── js/
-│       │   ├── simulator.js        # Simulator interaction engine
+│       │   ├── simulator.js        # Simulator engine: drag, rotate, beam cones, sun rays, panel physics
 │       │   └── cheatsheet.js       # Cheatsheet data loader
 │       └── images/                 # SVG placeholders
 ├── .github/
@@ -121,8 +124,8 @@ make run
 | `actions/checkout` | `v6` |
 | `actions/setup-go` | `v6` |
 | `golangci/golangci-lint-action` | `v9` |
-| `actions/upload-artifact` | `v4` |
-| `dependabot/fetch-metadata` | `v2` |
+| `actions/upload-artifact` | `v7` |
+| `dependabot/fetch-metadata` | `v3` |
 
 ## API Reference
 
@@ -256,7 +259,7 @@ Schedule: Weekly on Monday at 06:00 UTC. PRs are auto-merged after all CI passes
 
 Runs every Monday even without code changes:
 
-- Full `make update` verification (fmt → vet → lint → 148 tests → build)
+- Full `make update` verification (fmt → vet → lint → 180+ tests → build)
 - Docker image build + health check (starts container, curls `/api/health`)
 - `govulncheck` security scan for known Go vulnerabilities
 - Secret file detection in git history

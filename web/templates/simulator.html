@@ -10,6 +10,7 @@
                 <option value="food">Food</option>
                 <option value="headshot">Headshot</option>
                 <option value="group">Group</option>
+                <option value="outdoor">Outdoor</option>
             </select>
         </div>
         <div class="toolbar__section">
@@ -18,6 +19,29 @@
         </div>
         <div class="toolbar__section">
             <button class="btn btn--sm btn--primary" id="addLightBtn">+ Add Light</button>
+            <button class="btn btn--sm btn--panel" id="addPanelBtn">+ Add Panel</button>
+            <select id="accessorySelect" class="accessory-select" title="Add Accessories">
+                <option value="">+ Accessories</option>
+                <optgroup label="Lights">
+                    <option value="fill_light">Fill Light</option>
+                    <option value="rim_light">Rim / Edge Light</option>
+                    <option value="hair_light">Hair Light</option>
+                    <option value="bg_light">Background Light</option>
+                    <option value="sun">Sun (Outdoor)</option>
+                </optgroup>
+                <optgroup label="Negative Fill">
+                    <option value="neg_fill">V-Flat (Black Side)</option>
+                    <option value="flag">Flag / Gobo</option>
+                </optgroup>
+                <optgroup label="Bounce / Reflectors">
+                    <option value="bounce_white">Bounce Card (White)</option>
+                    <option value="bounce_silver">Bounce Card (Silver)</option>
+                    <option value="bounce_gold">Bounce Card (Gold)</option>
+                </optgroup>
+                <optgroup label="Diffusion">
+                    <option value="diffusion">Diffusion Scrim / Panel</option>
+                </optgroup>
+            </select>
             <button class="btn btn--sm btn--secondary" id="uploadBtn">Upload Photo</button>
             <input type="file" id="photoInput" accept=".jpg,.jpeg,.png,.webp" hidden>
         </div>
@@ -66,6 +90,10 @@
                 <span class="legend-item"><span class="legend-dot" style="background:#9C27B0"></span> Hair</span>
                 <span class="legend-item"><span class="legend-dot" style="background:#00BCD4"></span> BG</span>
                 <span class="legend-item"><span class="legend-dot" style="background:#FFC107"></span> Accent</span>
+                <span class="legend-item"><span class="legend-dot legend-dot--panel" style="background:#E0E0E0"></span> Bounce</span>
+                <span class="legend-item"><span class="legend-dot legend-dot--panel" style="background:#333"></span> NegFill</span>
+                <span class="legend-item"><span class="legend-dot legend-dot--panel" style="background:#1A1A1A;border:1px solid #666"></span> Flag</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#FFA726"></span> Sun</span>
             </div>
         </div>
 
@@ -75,7 +103,7 @@
                 <div class="preview__backdrop" id="previewBackdrop"></div>
                 <div class="preview__shadow-layer" id="shadowLayer"></div>
                 <div class="preview__subject" id="subjectContainer">
-                    <img id="subjectImg" src="/static/images/default-subject.png" alt="Subject">
+                    <img id="subjectImg" src="/static/images/default-subject.svg" alt="Subject">
                 </div>
                 <div class="preview__highlight-layer" id="highlightLayer"></div>
                 <div class="preview__info" id="previewInfo">
@@ -89,12 +117,17 @@
         <div class="simulator__controls-panel">
             <div class="controls-tabs">
                 <button class="tab active" data-tab="lights">Lights</button>
+                <button class="tab" data-tab="panels">Panels</button>
                 <button class="tab" data-tab="camera">Camera</button>
                 <button class="tab" data-tab="scene">Scene</button>
             </div>
 
             <div class="tab-content active" id="tab-lights">
                 <div id="lightsList"></div>
+            </div>
+
+            <div class="tab-content" id="tab-panels">
+                <div id="panelsList"></div>
             </div>
 
             <div class="tab-content" id="tab-camera">
@@ -196,6 +229,7 @@
                     <option value="headshot">Headshot</option>
                     <option value="group">Group</option>
                     <option value="sport">Sport</option>
+                    <option value="outdoor">Outdoor</option>
                     <option value="custom">Custom</option>
                 </select>
             </div>

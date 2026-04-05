@@ -9,9 +9,8 @@ updates:
       time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "github-actions"
+    reviewers:
+      - "srivickynesh"
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -24,9 +23,8 @@ updates:
       time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "go"
+    reviewers:
+      - "srivickynesh"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -39,9 +37,8 @@ updates:
       time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "docker"
+    reviewers:
+      - "srivickynesh"
     commit-message:
       prefix: "docker"
       include: "scope"

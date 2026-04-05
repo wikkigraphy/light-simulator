@@ -10,6 +10,7 @@ const (
 	LightTypeLED        LightType = "led_panel"
 	LightTypeRingLight  LightType = "ring_light"
 	LightTypeNatural    LightType = "natural"
+	LightTypeSun        LightType = "sun"
 )
 
 // ModifierType describes light shaping tools.
@@ -44,8 +45,9 @@ const (
 )
 
 // Position3D represents a light's spatial coordinates relative to the subject.
-// X: left(-) / right(+), Y: down(-) / up(+), Z: behind(-) / front(+).
-// Distance is in meters; angle is the light's aim in degrees from subject center.
+// X: left(-) / right(+), Y: down(-) / up(+), Z: behind subject(+) / toward camera(-).
+// In the top-down SVG diagram: camera sits at (0, -Distance), subject at origin.
+// Distance is in meters; angle is the azimuth from camera axis (0° = directly behind camera).
 type Position3D struct {
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
@@ -96,7 +98,41 @@ const (
 	ModeGroup    ShootMode = "group"
 	ModeBoudoir  ShootMode = "boudoir"
 	ModeSport    ShootMode = "sport"
+	ModeOutdoor  ShootMode = "outdoor"
 )
+
+// PanelType categorizes passive light-shaping panels.
+type PanelType string
+
+const (
+	PanelNegativeFill PanelType = "negative_fill"   // V-flat black side, absorbs bounce
+	PanelBounceWhite  PanelType = "bounce_white"    // V-flat white side, white foamcore
+	PanelBounceSilver PanelType = "bounce_silver"   // Silver reflector disc
+	PanelBounceGold   PanelType = "bounce_gold"     // Gold reflector disc, adds warmth
+	PanelDiffusion    PanelType = "diffusion_scrim" // Scrim jim, overhead diffusion
+	PanelFlag         PanelType = "flag"            // Small black flag/gobo/cutter
+)
+
+// PanelSize describes the physical dimensions of a panel.
+type PanelSize string
+
+const (
+	PanelSizeSmall  PanelSize = "small"  // 12×16″ card
+	PanelSizeMedium PanelSize = "medium" // 20×30″ foamcore / 42″ reflector disc
+	PanelSizeLarge  PanelSize = "large"  // 4×8′ V-flat
+	PanelSizeXLarge PanelSize = "xlarge" // 4×6′ scrim / 8×8′ overhead
+)
+
+// Panel represents a passive light-shaping element (reflector, V-flat, flag, scrim).
+type Panel struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Type     PanelType  `json:"type"`
+	Size     PanelSize  `json:"size"`
+	Position Position3D `json:"position"`
+	Rotation float64    `json:"rotation"` // orientation angle in degrees
+	Enabled  bool       `json:"enabled"`
+}
 
 // Scene represents the complete lighting and camera setup.
 type Scene struct {
@@ -104,6 +140,7 @@ type Scene struct {
 	Name     string         `json:"name"`
 	Mode     ShootMode      `json:"mode"`
 	Lights   []Light        `json:"lights"`
+	Panels   []Panel        `json:"panels,omitempty"`
 	Camera   CameraSettings `json:"camera"`
 	Backdrop string         `json:"backdrop"` // CSS color or gradient
 	Ambient  float64        `json:"ambient"`  // ambient light level 0-1

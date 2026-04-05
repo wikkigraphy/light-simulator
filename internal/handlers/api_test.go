@@ -306,6 +306,68 @@ func TestLensGuideReturnsData(t *testing.T) {
 	}
 }
 
+func TestAnalyzeWithPanels(t *testing.T) {
+	api := NewAPI()
+	scene := models.Scene{
+		Lights: []models.Light{
+			{ID: "key", Role: models.RoleKey, Enabled: true, Modifier: models.ModifierSoftbox,
+				Position: models.Position3D{X: -1, Z: 1, Distance: 2, Angle: 45}, Power: 70, ColorTemp: 5500},
+			{ID: "fill", Role: models.RoleFill, Enabled: true, Modifier: models.ModifierUmbrella,
+				Position: models.Position3D{X: 1, Z: 2, Distance: 2.2, Angle: -25}, Power: 30, ColorTemp: 5500},
+		},
+		Panels: []models.Panel{
+			{ID: "neg", Name: "Neg Fill", Type: models.PanelNegativeFill, Size: models.PanelSizeLarge,
+				Position: models.Position3D{X: 1.5, Y: 0, Z: 0.5, Distance: 1.0, Angle: -90}, Enabled: true},
+			{ID: "bounce", Name: "White Bounce", Type: models.PanelBounceWhite, Size: models.PanelSizeMedium,
+				Position: models.Position3D{X: 0, Y: -0.5, Z: 1.0, Distance: 0.8, Angle: 0}, Enabled: true},
+		},
+		Camera: models.CameraSettings{Aperture: 2.8, ISO: 100, ShutterSpeed: "1/200"},
+	}
+
+	body, _ := json.Marshal(scene)
+	req := newTestRequest(t, http.MethodPost, "/api/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	api.AnalyzeScene(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var analysis lighting.SceneAnalysis
+	if err := json.NewDecoder(w.Body).Decode(&analysis); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if len(analysis.PanelEffects) != 2 {
+		t.Errorf("expected 2 panel effects, got %d", len(analysis.PanelEffects))
+	}
+	if len(analysis.Contributions) != 2 {
+		t.Errorf("expected 2 contributions, got %d", len(analysis.Contributions))
+	}
+}
+
+func TestGetPresetReturnsPanels(t *testing.T) {
+	api := NewAPI()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/presets/{id}", api.GetPreset)
+
+	req := newTestRequest(t, http.MethodGet, "/api/presets/rembrandt", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var preset models.Preset
+	if err := json.NewDecoder(w.Body).Decode(&preset); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(preset.Scene.Panels) == 0 {
+		t.Error("rembrandt preset should have panels")
+	}
+}
+
 func TestRegisterRoutes(t *testing.T) {
 	api := NewAPI()
 	mux := http.NewServeMux()

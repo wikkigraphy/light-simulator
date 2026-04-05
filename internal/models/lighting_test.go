@@ -246,6 +246,140 @@ func TestPresetWithEmptyEquipment(t *testing.T) {
 	}
 }
 
+func TestPanelTypeConstants(t *testing.T) {
+	types := []PanelType{
+		PanelNegativeFill, PanelBounceWhite, PanelBounceSilver,
+		PanelBounceGold, PanelDiffusion, PanelFlag,
+	}
+	seen := make(map[PanelType]bool)
+	for _, pt := range types {
+		if pt == "" {
+			t.Error("empty panel type constant")
+		}
+		if seen[pt] {
+			t.Errorf("duplicate panel type: %q", pt)
+		}
+		seen[pt] = true
+	}
+	if len(types) != 6 {
+		t.Errorf("expected 6 panel types, got %d", len(types))
+	}
+}
+
+func TestPanelSizeConstants(t *testing.T) {
+	sizes := []PanelSize{
+		PanelSizeSmall, PanelSizeMedium, PanelSizeLarge, PanelSizeXLarge,
+	}
+	seen := make(map[PanelSize]bool)
+	for _, ps := range sizes {
+		if ps == "" {
+			t.Error("empty panel size constant")
+		}
+		if seen[ps] {
+			t.Errorf("duplicate panel size: %q", ps)
+		}
+		seen[ps] = true
+	}
+	if len(sizes) != 4 {
+		t.Errorf("expected 4 panel sizes, got %d", len(sizes))
+	}
+}
+
+func TestPanelJSONSerialization(t *testing.T) {
+	panel := Panel{
+		ID: "neg1", Name: "Black V-Flat", Type: PanelNegativeFill,
+		Size:     PanelSizeLarge,
+		Position: Position3D{X: 1.0, Y: 0, Z: 0.5, Distance: 1.0, Angle: -90},
+		Rotation: 90,
+		Enabled:  true,
+	}
+
+	data, err := json.Marshal(panel)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded Panel
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.ID != panel.ID {
+		t.Errorf("ID: expected %q, got %q", panel.ID, decoded.ID)
+	}
+	if decoded.Type != panel.Type {
+		t.Errorf("Type: expected %q, got %q", panel.Type, decoded.Type)
+	}
+	if decoded.Size != panel.Size {
+		t.Errorf("Size: expected %q, got %q", panel.Size, decoded.Size)
+	}
+	if decoded.Position.Distance != panel.Position.Distance {
+		t.Errorf("Distance: expected %f, got %f", panel.Position.Distance, decoded.Position.Distance)
+	}
+	if decoded.Rotation != panel.Rotation {
+		t.Errorf("Rotation: expected %f, got %f", panel.Rotation, decoded.Rotation)
+	}
+	if !decoded.Enabled {
+		t.Error("expected Enabled=true")
+	}
+}
+
+func TestSceneWithPanelsJSONSerialization(t *testing.T) {
+	scene := Scene{
+		ID: "test_panels", Name: "Scene with Panels", Mode: ModePortrait,
+		Lights: []Light{
+			{ID: "key", Name: "Key", Type: LightTypeStrobe, Modifier: ModifierSoftbox,
+				Role: RoleKey, Position: Position3D{Distance: 2}, Power: 70, ColorTemp: 5500, Enabled: true},
+		},
+		Panels: []Panel{
+			{ID: "vflat", Name: "Black V-Flat", Type: PanelNegativeFill, Size: PanelSizeLarge,
+				Position: Position3D{X: 1, Y: 0, Z: 0.5, Distance: 1.0, Angle: -90}, Enabled: true},
+			{ID: "bounce", Name: "White Card", Type: PanelBounceWhite, Size: PanelSizeMedium,
+				Position: Position3D{X: 0, Y: -0.5, Z: 1.0, Distance: 0.8, Angle: 0}, Enabled: true},
+		},
+		Camera:   CameraSettings{FocalLength: 85, Aperture: 2.8, ShutterSpeed: "1/200", ISO: 100, WhiteBalance: 5500, SensorSize: "full_frame", Distance: 2.5},
+		Backdrop: "#1a1a1a",
+		Ambient:  0.1,
+	}
+
+	data, err := json.Marshal(scene)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded Scene
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if len(decoded.Panels) != 2 {
+		t.Fatalf("expected 2 panels, got %d", len(decoded.Panels))
+	}
+	if decoded.Panels[0].Type != PanelNegativeFill {
+		t.Errorf("Panel[0].Type: expected %q, got %q", PanelNegativeFill, decoded.Panels[0].Type)
+	}
+	if decoded.Panels[1].Type != PanelBounceWhite {
+		t.Errorf("Panel[1].Type: expected %q, got %q", PanelBounceWhite, decoded.Panels[1].Type)
+	}
+}
+
+func TestSceneWithoutPanelsOmitsField(t *testing.T) {
+	scene := Scene{
+		ID: "no_panels", Mode: ModePortrait,
+		Lights: []Light{{ID: "key", Enabled: true}},
+	}
+
+	data, err := json.Marshal(scene)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	s := string(data)
+	if contains(s, `"panels"`) {
+		t.Error("expected panels field to be omitted when empty")
+	}
+}
+
 func TestPosition3DJSONFields(t *testing.T) {
 	pos := Position3D{X: 1.5, Y: 0.5, Z: -2.0, Distance: 3.0, Angle: 135}
 	data, err := json.Marshal(pos)

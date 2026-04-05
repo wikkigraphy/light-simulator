@@ -165,6 +165,48 @@ func TestAllPresetsEquipmentHasAtLeastOneLight(t *testing.T) {
 	}
 }
 
+func TestAllPresetsHavePanels(t *testing.T) {
+	for _, p := range AllPresets() {
+		if len(p.Scene.Panels) == 0 {
+			t.Errorf("preset %q has no panels", p.ID)
+		}
+	}
+}
+
+func TestPanelFieldsValid(t *testing.T) {
+	for _, p := range AllPresets() {
+		for i, panel := range p.Scene.Panels {
+			if panel.ID == "" {
+				t.Errorf("preset %q panel[%d] has empty ID", p.ID, i)
+			}
+			if panel.Name == "" {
+				t.Errorf("preset %q panel[%d] has empty Name", p.ID, i)
+			}
+			if panel.Type == "" {
+				t.Errorf("preset %q panel[%d] has empty Type", p.ID, i)
+			}
+			if panel.Size == "" {
+				t.Errorf("preset %q panel[%d] has empty Size", p.ID, i)
+			}
+			if !panel.Enabled {
+				t.Errorf("preset %q panel[%d] %q is disabled by default", p.ID, i, panel.Name)
+			}
+		}
+	}
+}
+
+func TestPanelIDsUniqueWithinPreset(t *testing.T) {
+	for _, p := range AllPresets() {
+		seen := make(map[string]bool)
+		for _, panel := range p.Scene.Panels {
+			if seen[panel.ID] {
+				t.Errorf("preset %q has duplicate panel ID: %q", p.ID, panel.ID)
+			}
+			seen[panel.ID] = true
+		}
+	}
+}
+
 func TestSpecificPresetsExist(t *testing.T) {
 	ids := map[string]bool{
 		"rembrandt": false, "beauty_ring": false, "cinematic_noir": false,

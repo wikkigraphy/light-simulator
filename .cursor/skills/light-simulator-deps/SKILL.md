@@ -22,16 +22,16 @@ cmd/server/main.go                → Entry point, server bootstrap, graceful sh
 internal/
   config/config.go                → Environment-based configuration (PORT, HOST, etc.)
   config/config_test.go           → Config unit tests (11 tests)
-  models/lighting.go              → Domain types: Light, Camera, Scene, Preset, EquipmentItem, Position3D
-  models/lighting_test.go         → Model JSON serialization & constant tests (10 tests)
-  lighting/engine.go              → Lighting computation engine (inverse-square, CSS filters)
-  lighting/engine_test.go         → Engine unit tests: contributions, shadows, catchlights, warnings (27 tests)
-  cheatsheet/presets.go           → 24 professional lighting presets across 7 categories, each with equipment lists
-  cheatsheet/presets_test.go      → Preset validation tests (13 tests)
+  models/lighting.go              → Domain types: Light, Camera, Scene, Preset, EquipmentItem, Position3D, Panel, PanelType, PanelSize, LightTypeSun, ModeOutdoor
+  models/lighting_test.go         → Model JSON serialization & constant tests (15 tests)
+  lighting/engine.go              → Lighting computation engine (inverse-square, CSS filters, geometric panel physics, sun directional light, elevation-based intensity)
+  lighting/engine_test.go         → Engine unit tests: contributions, shadows, catchlights, warnings, panel effects, geometric physics, sun contribution, sun panel interaction (48 tests)
+  cheatsheet/presets.go           → 27 professional lighting presets across 8 categories (incl. outdoor), each with equipment lists, panels, and fill panel descriptions
+  cheatsheet/presets_test.go      → Preset validation tests (16 tests)
   cheatsheet/guides.go            → Flash, modifier, and lens guide data
   cheatsheet/guides_test.go       → Guide data validation tests (8 tests)
   handlers/api.go                 → JSON API endpoints (/api/*)
-  handlers/api_test.go            → API handler tests (19 tests)
+  handlers/api_test.go            → API handler tests (21 tests)
   handlers/pages.go               → HTML template rendering with caching
   handlers/upload.go              → Photo upload with bg removal processing
   handlers/upload_test.go         → Upload handler tests (11 tests)
@@ -39,13 +39,14 @@ internal/
   imgproc/bgremove_test.go        → Image processing tests (13 tests)
   middleware/middleware.go         → Logger, Recovery, CORS, SecurityHeaders
   middleware/middleware_test.go    → Middleware unit tests (7 tests)
-  e2e_test.go                     → End-to-end integration tests (19 tests)
+  e2e_test.go                     → End-to-end integration tests (22 tests)
 web/
   templates/                      → Go html/template files (layout.html + pages)
   static/css/main.css             → Dark-theme responsive CSS
-  static/js/simulator.js          → Interactive light placement, drag, preview, URL preset loading, flash settings display, custom preset save/load/rename/delete (localStorage)
+  static/js/simulator.js          → Interactive light/panel placement, drag, preview, URL preset loading, flash settings display, panel controls, custom preset save/load/rename/delete (localStorage), delete buttons, accessories dropdown, sun marker/parallel rays rendering, intensity-based beam reach, panel rotation, inverse-square gradient cones
+  embed.go                        → Go embed.FS for templates and static assets
   static/js/cheatsheet.js         → Cheatsheet tab loading, clickable preset navigation
-  static/images/default-subject.png → Real portrait photo for live preview
+  static/images/default-subject.svg  → Detailed SVG portrait bust for live preview
   static/images/subject-placeholder.svg → SVG fallback
 ```
 
@@ -68,15 +69,15 @@ web/
 ### Build & CI Tools
 - **Go 1.26** — Language runtime (set in `.tool-versions`)
 - **golangci-lint v2** — Go linting, v2 config format (CI uses `golangci/golangci-lint-action@v9`)
-- **Docker** — Multi-stage build (golang:1.26-alpine → alpine:3.21)
+- **Docker** — Multi-stage build (golang:1.26-alpine → alpine:3.23)
 - **Make** — Build automation (`Makefile`), `make update` runs full pre-deploy verification
 - **air** — Optional live-reload for development
 - **GitHub Actions** — CI/CD pipeline (see CI/CD section below)
   - `actions/checkout@v6`
   - `actions/setup-go@v6`
   - `golangci/golangci-lint-action@v9`
-  - `actions/upload-artifact@v4`
-  - `dependabot/fetch-metadata@v2`
+  - `actions/upload-artifact@v7`
+  - `dependabot/fetch-metadata@v3`
 
 ### Deployment
 - **Vercel** — Production deployment using Vercel's native Go framework preset (`"framework": "go"`
@@ -142,7 +143,7 @@ web/
 | GET    | /uploads/*             | FileServer           | Serve uploaded files           |
 | GET    | /static/*              | FileServer           | Serve static assets            |
 
-## Lighting Presets (24 total)
+## Lighting Presets (27 total)
 
 | ID | Name | Category |
 |----|------|----------|
@@ -170,21 +171,24 @@ web/
 | rim_dramatic | Dramatic Rim / Edge Lighting | portrait |
 | group_photo | Group / Team Photo | group |
 | sport_action | Sport / Action Portrait | sport |
+| outdoor_golden_hour | Outdoor Golden Hour Portrait | outdoor |
+| outdoor_harsh_midday | Outdoor Harsh Mid-Day | outdoor |
+| outdoor_open_shade | Outdoor Open Shade Portrait | outdoor |
 
-## Test Coverage (151 tests)
+## Test Coverage (180+ tests)
 
 | Package | Test File | Tests | Coverage Areas |
 |---------|-----------|-------|----------------|
 | config | config_test.go | 11 | Defaults, env vars, port validation, Addr(), IsProd() |
-| models | lighting_test.go | 10 | Type constants, JSON serialization, Equipment, field presence |
-| lighting | engine_test.go | 27 | Inverse-square, modifiers, shadows, catchlights, warnings, CSS filters |
-| cheatsheet | presets_test.go | 14 | Count, required fields, unique IDs, categories, equipment lists, specific presets |
+| models | lighting_test.go | 15 | Type constants, Panel types/sizes, JSON serialization, Scene with panels |
+| lighting | engine_test.go | 48 | Inverse-square, modifiers, shadows, catchlights, warnings, CSS filters, geometric panel physics, sun contribution, sun panel interaction, sun scene analysis |
+| cheatsheet | presets_test.go | 16 | Count, required fields, unique IDs, categories, equipment, panels validation, panel field checks |
 | cheatsheet | guides_test.go | 8 | Flash/modifier/lens guides validation |
-| handlers | api_test.go | 19 | All API endpoints, error cases, response structure |
+| handlers | api_test.go | 21 | All API endpoints, error cases, response structure, panel-aware analyze, preset panels |
 | handlers | upload_test.go | 11 | Upload success, bg removal, extensions, serve files |
 | imgproc | bgremove_test.go | 13 | BG removal, color distance, edge weight, file/stream I/O, JPEG |
 | middleware | middleware_test.go | 7 | Chain order, logger, recovery, CORS, security headers |
-| e2e | e2e_test.go | 22 | Full workflow, all endpoints, upload+serve, static files, headers, flash settings, custom preset UI |
+| e2e | e2e_test.go | 32 | Full workflow, all endpoints, upload+serve, static files, headers, flash settings, custom preset UI, panel UI, panel-aware analysis, panel CSS filter effects, bounce ratio reduction, JS physics functions, all presets have panels, outdoor presets, sun analysis, sun panel interaction, outdoor mode in HTML |
 
 ## Key Dependency Rules
 
@@ -193,8 +197,28 @@ web/
 3. **Frontend must remain vanilla JS** — No build step, no npm.
 4. **When adding API endpoints**: Update this skill's API table.
 5. **When adding models**: Update `internal/models/lighting.go`.
-6. **When adding presets**: Add to `internal/cheatsheet/presets.go` with `Equipment` list,
-   register in `AllPresets()`, add to the preset table above, and add a test.
+6. **When adding presets**: Add to `internal/cheatsheet/presets.go` with `Equipment` list
+   and `Panels` slice, register in `AllPresets()`, add to the preset table above, and add a test.
+6b. **Panel types**: `PanelNegativeFill`, `PanelBounceWhite`, `PanelBounceSilver`,
+    `PanelBounceGold`, `PanelDiffusion`, `PanelFlag`. Sizes: `small`, `medium`, `large`, `xlarge`.
+    Engine computes `PanelEffect` for each enabled panel using geometric ray tracing:
+    `computeIncidentLight()` calculates per-panel illumination from each light source using
+    inverse-square falloff (or parallel-ray cosine attenuation for sun), cosine incidence, and
+    spill-cone intersection. Panel effects modify CSS filters (brightness, warmth, shadow quality)
+    both server-side and client-side. The JS `computeLocalPanelEffects()` mirrors the Go physics.
+    SVG diagram shows light-panel interaction rays, rotatable panels, and intensity-based beam
+    reach. All 27 presets include panels.
+6c. **Light types**: `strobe`, `continuous`, `speedlight`, `ring`, `sun`.
+    Sun (`LightTypeSun`) is a directional light with no inverse-square falloff — intensity
+    depends on elevation (`Position.Y`), with fixed softness 0.15 and 180° spill angle.
+6d. **Shoot modes**: `studio`, `outdoor`, `location`, `natural`, `mixed`.
+    Outdoor mode (`ModeOutdoor`) enables sun-based presets and parallel-ray visualization.
+6e. **Beam visualization**: Light beam cones extend from source toward the subject with
+    intensity-based reach (`effectiveReachPx = sqrt(power/2)`). Gradient opacity reflects
+    real-world inverse-square falloff. Sun uses parallel rays with arrow tips instead of cones.
+6f. **Panel rotation**: Panels in the SVG diagram are rotatable via a rotation handle or
+    Shift+drag. Rotation angle is stored in `panel.rotation` and affects the panel's normal
+    direction for physics calculations.
 7. **When modifying CI/CD**: Update workflows in `.github/workflows/` and this file.
    Dependabot auto-bumps Actions/Go/Docker deps weekly with auto-merge after CI passes.
 8. **Cheatsheet → Simulator**: Preset cards link via `?preset={id}` query param.
@@ -206,7 +230,7 @@ web/
 10. **Flash settings display**: When a preset is loaded, the analysis panel shows a
    detailed Flash & Camera Settings table (per-light: type, modifier, power, temp, CRI,
    distance, angle, height, grid, feathered) plus the equipment list.
-11. **Default subject image**: `web/static/images/default-subject.png` (real portrait photo).
+11. **Default subject image**: `web/static/images/default-subject.svg` (detailed SVG portrait bust).
 10. **Upload flow**: POST `/api/upload` → saves original → `imgproc.RemoveBackground()` →
     outputs transparent PNG → returns processed URL. Client shows loading state during processing.
 11. **Background removal**: `internal/imgproc/bgremove.go` uses edge-aware chroma keying:
